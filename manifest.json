@@ -1,0 +1,25 @@
+{
+  "name": "gezhi-navigator-ppt-designer",
+  "display_name": "GEZHI NAVIGATOR PPT Designer｜格知导师计划课件生成器",
+  "version": "1.0.0",
+  "entrypoint": "SKILL.md",
+  "language": "zh-CN",
+  "project": "GEZHI NAVIGATOR",
+  "outputs": [
+    "pptx"
+  ],
+  "reference_priority": [
+    "shared_patterns_between_lesson_1_and_2",
+    "lesson_2_newer_patterns",
+    "lesson_1_specific_patterns"
+  ],
+  "assets": [
+    "assets/gezhi-logo.png"
+  ],
+  "references": [
+    "references/NAVIGATOR_VISUAL_SPEC.md",
+    "references/PAGE_ARCHETYPE_LIBRARY.md",
+    "references/REFERENCE_INDEX.md",
+    "references/QUALITY_CHECKLIST.md"
+  ]
+}
