@@ -1,13 +1,18 @@
 {
   "name": "gezhi-navigator-ppt-designer",
   "display_name": "GEZHI NAVIGATOR PPT Designer｜格知导师计划课件生成器",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "entrypoint": "SKILL.md",
   "language": "zh-CN",
   "project": "GEZHI NAVIGATOR",
   "outputs": [
+    "slides",
     "pptx"
   ],
+  "execution_dependency": {
+    "ppt": "/home/user/.doubao/agent_mode/workspace/.skills/ppt/SKILL.md",
+    "note": "本技能为设计决策层，不直接生成文件。制作 PPT 时必须同步调用 ppt 技能（飞书幻灯片）完成创建、XML 编写、静态校验、写入、回读、截图验收与交付。"
+  },
   "reference_priority": [
     "shared_patterns_between_lesson_1_and_2",
     "lesson_2_newer_patterns",

@@ -2,9 +2,11 @@
 name: gezhi-navigator-ppt-designer
 description: >
   当用户上传 PPT 内容稿（优先 Markdown）时，基于 GEZHI NAVIGATOR｜格知导师计划既有课件视觉体系，
-  自动完成内容结构识别、轻度编辑、页面类型判断、拆页/增页、版式设计、可编辑 PPTX 生成与自检。
+  自动完成内容结构识别、轻度编辑、页面类型判断、拆页/增页与版式设计（设计决策层）。
+  本技能不直接生成文件：所有执行落地必须同步调用「ppt」技能（飞书幻灯片）完成
+  XML 编写、静态校验、写入、回读、截图验收与交付（执行落地层）。
   内容稿决定“说什么”，第一课和第二课决定“属于什么设计体系”，每页语义决定“这一页怎么设计”。
-version: 1.0.0
+version: 1.2.0
 language: zh-CN
 ---
 
@@ -24,6 +26,51 @@ language: zh-CN
 
 > **内容稿决定“说什么”；参考成品决定“属于什么设计体系”；每一页的具体语义决定“这一页应该怎么设计”。**
 
+## 0.1 技能分工（必须遵守）
+
+本技能与 `ppt` 技能（飞书幻灯片）是**设计决策 → 执行落地**的协同关系，制作 PPT 时必须同步调用，缺一不可：
+
+| 层 | 技能 | 职责 |
+| --- | --- | --- |
+| 设计决策层 | 本技能 `gezhi-navigator-ppt-designer` | 读取内容稿、识别课程结构、拆页/增页、选页面原型、定版式与视觉细节、定义质检标准 |
+| 执行落地层 | `ppt`（`/home/user/.doubao/agent_mode/workspace/.skills/ppt/SKILL.md`） | 创建空白幻灯片、素材去底与上传、XML 编写、静态校验、写入、回读、截图验收、修复、交付 |
+
+本技能**不直接生成文件**，也不以“输出设计说明”作为结束。每页设计决策必须交给 `ppt` 技能落地为飞书幻灯片：本技能产出“这一页设计成什么”，`ppt` 技能负责“怎么用 lark-cli 和 XML 真正做出来并交付”。
+
+执行顺序：
+
+1. 本技能：完整阅读内容稿与参考课件 → 建立课程结构与页面规划 → 逐页确定原型/版式/视觉细节；
+2. `ppt` 技能：按其「新建幻灯片」流程创建空白幻灯片，**创建后立即按 §0.2 把演示文稿移动到指定云盘文件夹**，再发开工通知（`present_files`）；
+3. 循环逐页：本技能给出该页设计 → `ppt` 技能落 XML → 静态校验（`error_count` 必须为 0）→ 写入；
+4. 验收：回读全文 + 全文静态校验 + 逐页截图核对（双层质检，见 §17）；
+5. 交付：`ppt` 技能用 `present_files` 交付幻灯片链接（交付前复核 §0.2 保存位置）。
+
+## 0.2 PPT 产物保存位置（硬规则）
+
+所有 NAVIGATOR 生成的飞书幻灯片，最终必须保存在格知导师计划的指定飞书云盘文件夹，**不得**默认留在"我的空间"或其他位置：
+
+- 目标文件夹 URL：`https://gezhiedu.feishu.cn/drive/folder/DYxafszAGl3SuRdmbp5cBrgHnYd`
+- `folder_token`：`DYxafszAGl3SuRdmbp5cBrgHnYd`
+
+落地步骤（两步创建流程的组成部分，缺一不可）：
+
+1. `ppt` 技能用 `lark-cli slides +create` 创建空白幻灯片并拿到 `xml_presentation_id` 后，**立即**执行移动（先读 `lark-drive` 技能确认命令语法）：
+
+   ```bash
+   lark-cli drive +move \
+     --file-token <xml_presentation_id> \
+     --type slides \
+     --folder-token DYxafszAGl3SuRdmbp5cBrgHnYd
+   ```
+
+   `xml_presentation_id` 即幻灯片 URL `/slides/` 路径中的 token，直接作为 `--file-token`；`--type` 固定为 `slides`。
+
+2. 移动成功后再发开工通知、继续逐页写入。移动只改变文件所在文件夹，**不改变幻灯片 URL**，后续 `+add-slide` / `+xml-get` / `+screenshot` 仍用原 `xml_presentation_id`。
+
+3. 交付前确认移动已生效：`drive +move` 返回成功；必要时用 `lark-cli drive files list --params '{"folder_token":"DYxafszAGl3SuRdmbp5cBrgHnYd"}'` 复核幻灯片已在目标文件夹内。
+
+若 `drive +move` 失败（如权限不足、目标文件夹不可访问），停止交付并向用户说明，**不得**静默把幻灯片留在默认位置。
+
 ---
 
 # 1. 触发条件
@@ -36,6 +83,8 @@ language: zh-CN
 - “把这个 Markdown 做成课程 PPT”
 - “继续做导师计划第 X 课”
 - “按之前第一课、第二课的风格制作”
+
+触发本技能时，**必须同步调用 `ppt` 技能**（`/home/user/.doubao/agent_mode/workspace/.skills/ppt/SKILL.md`），按其「新建幻灯片」流程（或「编辑已有幻灯片」流程，视场景而定）完成执行落地。本技能只做设计决策，不做文件生成。
 
 默认输入优先级：
 
@@ -63,6 +112,11 @@ language: zh-CN
 - `references/PAGE_ARCHETYPE_LIBRARY.md`
 - `references/REFERENCE_INDEX.md`
 - `references/QUALITY_CHECKLIST.md`
+
+执行落地前，**必须完整读取 `ppt` 技能**：
+
+- `ppt/SKILL.md`（`/home/user/.doubao/agent_mode/workspace/.skills/ppt/SKILL.md`）——执行落地总入口：场景路由、新建/编辑流程、XML 语法、校验与交付；
+- 动手前按其要求完整读取引用的分支文档（`style/`、`xml/`、`cli/`、`workflow/`、`scripts/`），特别是生成任何 XML 前必读 `references/xml/xml-schema-quick-ref.md`。
 
 如果源 PPT 无法被程序直接读取，不得放弃风格约束；继续按 `NAVIGATOR_VISUAL_SPEC.md` 执行。
 
@@ -232,7 +286,10 @@ language: zh-CN
 - 中文/英文字体体系固定；
 - 左侧约 6.8% 主安全边距；
 - 顶部 Part / 英文标签 / 中文主标题形成稳定层级；
-- 常规内容页底部保留 `GEZHI NAVIGATOR` 与页码；
+- **普通内容页与课程地图页：左上角必须放小 logo 图标（`assets/gezhi-logo.png`），logo 下方紧邻 Part/英文标签；右上角必须放 `GE ZHI 格知 丨 知无涯 · 行有格` 橙色品牌小字**；
+- **章节过渡页：左上角不放 logo 图标，右上角不放品牌小字，右下角不放页码**；
+- 常规内容页与课程地图页底部保留 `GEZHI NAVIGATOR` 与页码；
+- 封面页与结束页：左上角小 logo + `GEZHI · NAVIGATOR`，右侧放大装饰 logo + 格知水印，右上角不放品牌小字；
 - 章节页使用大编号 + 大标题 + 一句话副标题；
 - 高留白、强标题、大数字、信息结构优先。
 
@@ -411,6 +468,8 @@ Logo 优先使用 `assets/gezhi-logo.png`。
 - 基础图形 = 原生矢量元素；
 - Logo/真实图片才使用图片对象。
 
+以上可编辑元素通过 `ppt` 技能规定的 XML schema（原生 `<text>` / `<shape>` / `<line>` 等）落地为飞书幻灯片中的原生对象；禁止把整页渲染成一张图片后铺满幻灯片，也禁止只交付设计稿/截图。
+
 ---
 
 # 15. 默认交互策略
@@ -443,12 +502,16 @@ Logo 优先使用 `assets/gezhi-logo.png`。
 
 默认主要交付物：
 
-> **完整 PPTX**
+> **飞书幻灯片（在线 Slides）**
 
-必须：
+由 `ppt` 技能创建并写入，最终以幻灯片链接交付（必要时再按 `ppt` 技能流程导出 PPTX 一并交付）。本技能不直接产出文件。
+
+**保存位置（硬规则）**：所有新生成的幻灯片必须保存到 §0.2 指定的飞书云盘文件夹（`folder_token: DYxafszAGl3SuRdmbp5cBrgHnYd`）。创建空白幻灯片后立即 `drive +move` 移动到位，交付前复核位置；移动失败不得静默交付。
+
+交付物必须：
 
 - 16:9；
-- 可编辑；
+- 可编辑（文字/数字/卡片/流程节点/箭头均为原生元素，非整页图片）；
 - 无文字重叠；
 - 无出界；
 - 无截断；
@@ -463,7 +526,16 @@ Logo 优先使用 `assets/gezhi-logo.png`。
 - PDF；
 - 图片；
 - Markdown；
-- 页面截图。
+- 页面截图；
+- 设计说明/版式描述。
+
+执行要求（全部按 `ppt` 技能规定的命令与流程执行）：
+
+- 创建空白幻灯片（`lark-cli slides +create`）后先用 `present_files` 发出开工通知；
+- 逐页：本技能定设计 → 落 XML → 静态校验（`python3 scripts/xml_lint.py --input <文件>`，`error_count` 必须为 0）→ 写入（`+add-slide`，记下 `slide_id`）；
+- 每个新增页面在 `<note>` 中提供 3–5 句可直接照读的讲稿；
+- 全篇禁止 emoji，语义图标用 IconPark `<icon>`（检索方式见 `ppt` 技能）；
+- 图片素材：真实实体图用搜图工具获取，插画/主视觉用生图工具生成，先取到本地、必要时去底、再经 `+media-upload` 上传拿到 `file_token` 后写入 `<img src>`，禁止使用 http(s) 外链；
 
 ---
 
@@ -471,13 +543,22 @@ Logo 优先使用 `assets/gezhi-logo.png`。
 
 生成完成后，不允许直接交付。
 
-必须执行 `references/QUALITY_CHECKLIST.md`。
+**双层质检，缺一不可：**
+
+1. **本技能·设计质检**：按 `references/QUALITY_CHECKLIST.md` 检查品牌统一、内容未篡改、页面节奏、页面原型使用是否合理、是否符合 §8 视觉硬约束；
+2. **`ppt` 技能·工程质检**：按 `ppt` 技能的验收流程执行——
+   - 全文回读（`slides +xml-get --presentation <id> --output <文件>`），按实际顺序核对页序与 slide_id；
+   - 对回读全文重跑静态校验（`python3 scripts/xml_lint.py --input <回读文件>`），`error_count` 必须为 0；
+   - 逐页截图核对真实渲染（`slides +screenshot`），检查文字重叠、出界、截断、配色与版式是否符合 NAVIGATOR 视觉规范；
+   - 位置核对：确认幻灯片已在 §0.2 目标云盘文件夹内（创建后已执行 `drive +move`，交付前复核 `drive files list` 可见）。
 
 检查后：
 
 > **自动修改 → 再检查 → 再交付**
 
-而不是只告诉用户“第 X 页有问题”。
+而不是只告诉用户“第 X 页有问题”。发现问题按 `ppt` 技能的 `+replace-slide` / `+update-slide` / `+delete-slide` + `+add-slide` 修复，修复后必须重新回读、重新校验。
+
+全部通过后，用 `present_files` 交付最终幻灯片链接（跨轮编辑同样必须再次交付最新版本）。
 
 ---
 
